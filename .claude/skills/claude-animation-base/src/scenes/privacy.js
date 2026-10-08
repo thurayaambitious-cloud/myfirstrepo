@@ -1,4 +1,4 @@
-// privacy.js: "The bait", 15 s. Clawd's personal-data card is snatched by a phishing hook, he takes it back and locks it away.
+// privacy.js: "My data is mine", 15 s. A little girl guards her personal-data card from a phishing hook and locks it in a safe.
 (() => {
   const G = 880;
   const WIPE = [PAL.indigo, PAL.teal];
@@ -132,112 +132,217 @@
     inkLine([[x - 28 * q, y + 2 * q], [x - 8 * q, y + 26 * q], [x + 32 * q, y - 24 * q]].map((p, i, a) => i === 0 ? p : [lerp(a[i - 1][0], p[0], tk), lerp(a[i - 1][1], p[1], tk)]), 6, PAL.cream, 'ink', .3);
   }
 
-  // ---------- shot A: the bait ----------
-  const CARD0 = [1060, 620];
-  function shotBait(t, lt, dur) {
-    const hookX = 1290, tSnag = 3.55, tYank = 3.7;
-    // hook path (eye position)
-    let hx = hookX, hy = kf(lt, [[1.2, -260], [2.4, 300]], easeOut), r = .1 * Math.sin(lt * 2.2) * (lt < 3 ? 1 : 0);
-    if (lt >= 3.0) { const k = ease(seg(lt, 3.0, tSnag)); hx = lerp(hookX, CARD0[0] - 36, k); hy = lerp(300, CARD0[1] - HOLE - HB, k) - 70 * Math.sin(k * Math.PI); r = .1 * Math.sin(3 * 2.2) * (1 - k); }
-    if (lt >= tYank) hy = lerp(CARD0[1] - HOLE - HB, -520, easeIn(seg(lt, tYank, 4.6)));
-    r += ring(lt, [tYank], 5, 20) * .16;
-    const bob = lt < tSnag ? 12 * Math.sin(lt * 3) : 0;
-    camBegin(960, kf(lt, [[0, 540], [3.7, 540], [4.6, 470]]), 1 + .03 * seg(lt, 0, 3.7));
-    room(t);
-    // Clawd
-    const u = 26, x0 = 780, walk = stroll(lt, 2.45, 3.1, x0, 900, u), x = lt < 2.45 ? x0 : walk.x;
-    const mood = emotions(lt, [[0, 'love', { lookX: .75, lookY: .1 }], [1.55, 'surprised', { lookX: .9, lookY: -.7 }], [2.15, 'starstruck', { lookX: .9, lookY: -.8 }],
-                               [3.78, 'surprised', { lookX: .3, lookY: -1 }], [4.3, 'scared', { lookX: .3, lookY: -1 }]]);
-    let pose = {};
-    if (lt >= 2.45 && lt < 3.1) pose = { view: 'q', walk: walk.walk };
-    else if (lt >= 3.1 && lt < 3.9) pose = {};
-    const jmp = jump(lt, 3.95, 4.45, 2.2);
-    const reach = ease(seg(lt, 3.85, 4.0)) * (1 - ease(seg(lt, 4.5, 4.75)));
-    const cl = { ...mood, ...pose, sq: (mood.sq || 0) + jmp.sq, dy: (mood.dy || 0) + jmp.dy + (pose.dy || 0) };
-    if (reach > 0) { cl.aL = lerp(mood.aL ?? .2, 1.4, reach); cl.aR = lerp(mood.aR ?? .2, 1.4, reach); }
-    // card: floats beside him, then hangs from the hook
-    let cc = [CARD0[0], CARD0[1] + bob], cr = .05 * Math.sin(lt * 2.5);
-    if (lt >= tSnag) { const B = hookB(hx, hy, r), sw = r * 1.3 + ring(lt, [tSnag, tYank], 4, 16) * .12; const o = rot2(0, HOLE, sw); cc = [B[0] + o[0], B[1] + o[1]]; cr = sw; }
-    card(cc[0], cc[1], cr, { glow: lt < tSnag ? .3 : .15 });
-    clawd(x, G, u, cl);
-    hook(hx, hy, r, 1, t);
-    camEnd();
-    boilSeed('transition');
-    if (lt < .5) iris(...toScreen(x0, G - 4 * u, { cx: 960, cy: 540, zoom: 1, rot: 0 }), lerp(0, 1500, easeIn(lt / .5)));
-    if (lt > dur - .3) brushWipe((lt - (dur - .3)) / .6, WIPE);
+
+  // ---------- the little girl ----------
+  const SKIN = '#F4C9A5', HAIR = '#5B3B2E', DRESS = '#F2B64B', BOW = '#E2476E';
+  // girl(x, y, u, o): (x, y) = ground point between the feet. o: dy, sq, rot, tilt (head), mouth (0..1 open, or -1 for a smile),
+  // eyes ('open' | 'happy' | 'wide' | 'closed'), brow (-1 worried/angry .. 1 raised), look (-1..1), blush,
+  // aL/aR arm angle (0 = out, + = up, - = down) or handL/handR = [x, y] targets in u, walk (leg phase), sway (hair swing),
+  // held(u): draws a prop between the body and the hands, in px relative to the feet.
+  function girl(x, y, u, o = {}) {
+    const T0 = o.t ?? T, sq = o.sq || 0, dy = (o.dy || 0) * u, tilt = o.tilt || 0, sway = o.sway ?? Math.sin(T0 * 3) * .15;
+    const S = (a, b) => [a * u, b * u];
+    push(); translate(x + (o.dx || 0) * u, y + dy); rotate(o.rot || 0); scale(1 + sq * .6, 1 - sq);
+    const key = o.key || 'g';
+    // shadow
+    boilSeed(key + 'sh'); paint(ellPts(0, 2, 5.5 * u, .8 * u, 20, 1), { wash: PAL.ink, washOp: 45, ink: null });
+    // legs and shoes
+    boilSeed(key + 'legs');
+    for (const s of [-1, 1]) {
+      const ph = o.walk == null ? 0 : Math.max(0, Math.sin(o.walk * Math.PI + (s > 0 ? Math.PI : 0))), lift = ph * .9 * u, fx = s * 1.15 * u + ph * .5 * u * (o.walkDir ?? 0);
+      paint(rrPts(fx - .4 * u, -1.9 * u - lift * .3, .8 * u, 1.7 * u, .3 * u, .4), { wash: SKIN, ink: PAL.ink, sw: .9 });
+      paint(ellPts(fx + .15 * u * (o.walkDir ?? 0), -.35 * u - lift, 1.0 * u, .55 * u, 14, .5), { wash: '#7A4A3A', ink: PAL.ink, sw: .9 });
+    }
+    // pigtails behind
+    const hc = [0, -5.3 * u]; push(); translate(hc[0], hc[1]); rotate(tilt); translate(-hc[0], -hc[1]);
+    boilSeed(key + 'tails');
+    for (const s of [-1, 1]) {
+      const w = sway * s;
+      const P = through([S(s * 3.4, -11.2), S(s * (5.2 + w), -9.6), S(s * (5.9 + w * 1.6), -7.2), S(s * (5.1 + w * 2), -5)], 6);
+      paint(ribbon(P, 1.5 * u, .5 * u), { wash: HAIR, ink: PAL.ink, sw: .9 });
+    }
+    paint(ellPts(0, -9.2 * u, 4.55 * u, 4.4 * u, 28, 1), { wash: HAIR, ink: PAL.ink, sw: 1 });
+    pop();
+    // body (dress)
+    boilSeed(key + 'body');
+    paint([S(-1.9, -5.5), S(1.9, -5.5), S(3.3, -1.8), S(-3.3, -1.8)], { wash: DRESS, curv: .15, ink: PAL.ink, sw: 1.1 });
+    paint([S(-3.3, -2.3), S(3.3, -2.3), S(3.3, -1.8), S(-3.3, -1.8)], { wash: mixCol(DRESS, PAL.clay, .35), ink: null });
+    paint(ellPts(0, -5.45 * u, 1.5 * u, .55 * u, 14, .4), { wash: PAL.cream, ink: PAL.ink, sw: .8 });
+    paint(heartPts(0, -3.7 * u, .55 * u), { wash: BOW, ink: null });
+    // held prop, then arms over it
+    if (o.held) o.held(u);
+    const sh = s => [s * 2.0 * u, -4.9 * u];
+    const hand = (s, hnd, a) => {
+      const A = sh(s); if (hnd) return S(hnd[0], hnd[1]);
+      return [A[0] + s * Math.cos(a) * 2.7 * u, A[1] - Math.sin(a) * 2.7 * u];
+    };
+    boilSeed(key + 'arms');
+    for (const s of [-1, 1]) {
+      const A = sh(s), Hh = hand(s, s < 0 ? o.handL : o.handR, s < 0 ? (o.aL ?? -.9) : (o.aR ?? -.9));
+      const mid = [(A[0] + Hh[0]) / 2 + s * .35 * u, (A[1] + Hh[1]) / 2 + .25 * u];
+      paint(ribbon(through([A, mid, Hh], 5), .95 * u, .75 * u), { wash: SKIN, ink: PAL.ink, sw: .9 });
+      paint(ellPts(A[0], A[1] + .1 * u, .85 * u, .75 * u, 10, .3), { wash: DRESS, ink: PAL.ink, sw: .8 });
+      paint(ellPts(Hh[0], Hh[1], .6 * u, .6 * u, 12, .3), { wash: SKIN, ink: PAL.ink, sw: .8 });
+    }
+    // head
+    push(); translate(hc[0], hc[1]); rotate(tilt); translate(-hc[0], -hc[1]);
+    boilSeed(key + 'head');
+    paint(ellPts(0, -8.9 * u, 4.2 * u, 3.9 * u, 28, .8), { wash: SKIN, ink: PAL.ink, sw: 1.1 });
+    paint([S(-4.25, -9.6), S(-3.8, -12.1), S(0, -13.2), S(3.8, -12.1), S(4.25, -9.6), S(3.3, -10.5), S(2.1, -9.4), S(.7, -10.5), S(-.7, -9.5), S(-2.1, -10.6), S(-3.3, -9.5)], { wash: HAIR, curv: .2, ink: PAL.ink, sw: 1 });
+    for (const s of [-1, 1]) {   // bows
+      const bx = s * 3.5 * u, by = -11.3 * u;
+      paint([[bx, by], [bx + s * 1.5 * u, by - .95 * u], [bx + s * 1.5 * u, by + .95 * u]], { wash: BOW, ink: PAL.ink, sw: .8 });
+      paint([[bx, by], [bx - s * 1.3 * u, by - .9 * u], [bx - s * 1.3 * u, by + .9 * u]], { wash: BOW, ink: PAL.ink, sw: .8 });
+      paint(ellPts(bx, by, .4 * u, .4 * u, 8), { wash: mixCol(BOW, PAL.ink, .3), ink: null });
+    }
+    // face
+    boilSeed(key + 'face');
+    const lx = (o.look || 0) * .35 * u, blink = (T0 % 3.4) < .12, eyes = blink && !o.noBlink ? 'closed' : (o.eyes || 'open');
+    for (const s of [-1, 1]) {
+      const ex = s * 1.65 * u + lx, ey = -8.7 * u;
+      if (eyes === 'closed') inkLine([[ex - .6 * u, ey], [ex, ey + .12 * u], [ex + .6 * u, ey]], 1.4, PAL.ink, 'ink', .6);
+      else if (eyes === 'happy') inkLine([[ex - .65 * u, ey + .25 * u], [ex, ey - .4 * u], [ex + .65 * u, ey + .25 * u]], 1.6, PAL.ink, 'ink', .7);
+      else {
+        const k = eyes === 'wide' ? 1.25 : 1;
+        paint(ellPts(ex, ey, .6 * u * k, .85 * u * k, 14, .3), { wash: PAL.ink, ink: null });
+        paint(ellPts(ex - .2 * u, ey - .3 * u * k, .22 * u, .26 * u, 8), { wash: PAL.cream, ink: null });
+      }
+      const br = o.brow ?? 0;   // -1: slanted down toward the nose (cross), 1: raised
+      inkLine([[ex - .7 * u, ey - 1.15 * u - br * .3 * u + (br < 0 ? -s * br * .0 : 0)], [ex + .7 * u, ey - 1.15 * u - br * .3 * u + (br < 0 ? s * br * .45 * u : 0)]].map((p, i) => i === 1 && br < 0 ? [p[0], p[1]] : p), 1.1, HAIR, 'ink', .4);
+      paint(ellPts(s * 2.75 * u, -7.5 * u, .75 * u, .42 * u, 10, .3), { wash: PAL.rose, washOp: 40 + 160 * (o.blush ?? .6), ink: null });
+    }
+    const m = o.mouth ?? -1;
+    if (m < 0) inkLine([[-.8 * u, -6.9 * u], [0, -6.35 * u], [.8 * u, -6.9 * u]], 1.5, PAL.ink, 'ink', .7);
+    else if (m < .05) inkLine([[-.6 * u, -6.7 * u], [.6 * u, -6.7 * u]], 1.4, PAL.ink, 'ink', .3);
+    else {
+      paint(ellPts(0, -6.7 * u, (.45 + .3 * m) * u, (.12 + .62 * m) * u, 14, .3), { wash: '#8B2E3F', ink: PAL.ink, sw: 1 });
+      if (m > .45) paint(ellPts(0, -6.35 * u, .35 * u, .2 * u, 8), { wash: PAL.rose, ink: null });
+    }
+    pop();
+    pop();
+  }
+  // mouth opening while she speaks: a flapping syllable pattern inside each speech window, closed (smile) outside
+  const SPEECH = [[.6, 2.45], [2.55, 3.85], [3.95, 5.1], [5.6, 6.95], [7.05, 8.6], [8.7, 11.0], [11.4, 13.8]];
+  function talk(t) {
+    for (const [a, b] of SPEECH) if (t >= a && t <= b) {
+      const e = Math.min(seg(t, a, a + .08), 1 - seg(t, b - .08, b)), f = Math.floor(t * 9);
+      return e * (.2 + .8 * hash(f * 3.7)) * (.6 + .4 * Math.abs(Math.sin(t * 13)));
+    }
+    return -1;
   }
 
-  // ---------- shot B: the safe ----------
-  function shotSafe(t, lt, dur) {
-    const u = 26, tJ0 = 1.35, tJ1 = 2.0, tCatch = 1.72, tW0 = 2.7, tW1 = 3.9, tPut = 4.0, tPutEnd = 4.5, tClose = 4.6, tSlam = 4.95;
-    const hx = 760, lower = kf(lt, [[0, 20], [1.3, 320]], easeOut);
-    let hy = lower + 6 * Math.sin(lt * 3);
-    if (lt >= tCatch - .05) hy = lerp(hy, -520, easeIn(seg(lt, tCatch + .05, 2.9)));
-    const hr = .08 * Math.sin(lt * 2.4) * (1 - seg(lt, 1.2, 1.4)) + ring(lt, [tCatch], 5, 22) * .2;
-    const shake = lt > tSlam ? shakeXY(t, 6 * Math.exp(-(lt - tSlam) * 9)) : [0, 0];
-    camBegin(kf(lt, [[0, 960], [2.4, 960], [4.0, 1060]]) + shake[0], 540 + shake[1], 1);
+  // ---------- subtitles (Arabic, drawn on a soft paper plate) ----------
+  const LINES = [
+    [.5, 2.5, 'بياناتي الخاصة ملكي…'], [2.5, 3.9, 'أحافظ عليها'], [3.9, 5.3, 'ولا أشاركها مع الآخرين!'],
+    [5.5, 7.0, 'بخطوات صغيرة'], [7.0, 8.7, 'ووعي كبير،'], [8.7, 11.2, 'نتعلم أن حماية المعلومات الشخصية'], [11.2, 14.0, 'مسؤولية تبدأ من الطفولة.']
+  ];
+  function caption(t) {
+    for (const [a, b, txt] of LINES) {
+      if (t < a || t > b) continue;
+      if (Math.min(seg(t, a, a + .15), 1 - seg(t, b - .12, b)) < .04) continue;
+      const al = Math.min(seg(t, a, a + .15), 1 - seg(t, b - .12, b)), w = Math.max(360, txt.length * 36 + 110);
+      boilSeed('cap');
+      paint(rrPts(W / 2 - w / 2, 925, w, 100, 38, 1.5), { wash: PAL.cream, washOp: 235 * al, ink: PAL.ink, sw: .9 });
+      letter(txt, W / 2, 976, 62, PAL.ink, { font: 'bold 62px "DejaVu Sans", "Noto Naskh Arabic", sans-serif', ink: false, alpha: al, screen: true, pop: .6 + .4 * al });
+    }
+  }
+
+  // ---------- shot A: she guards her card ----------
+  const GU = 30;
+  function shotGuard(t, lt, dur) {
+    const gx = 760, hookX0 = 1300;
+    camBegin(960, 540, 1 + .03 * seg(lt, 0, 4.5));
     room(t);
-    // Clawd
-    const jmp = jump(lt, tJ0, tJ1, 5), walk = stroll(lt, tW0, tW1, 760, 1215, u);
-    const x = lt < tJ0 ? 660 : lt < tW0 ? lerp(660, 760, ease(seg(lt, tJ0, tJ1))) : walk.x;
-    const mood = emotions(lt, [[0, 'determined', { lookX: .6, lookY: -.9 }], [2.0, 'proud'], [4.0, 'hopeful', { lookX: .7, lookY: -.2 }], [4.95, 'happy']]);
-    let pose = {};
-    if (lt < tJ0 - .1) pose = { aL: -.3, aR: -.3 };
-    else if (lt < tCatch + .3) { const a = lerp(.2, 1.45, ease(seg(lt, tJ0, tCatch))); pose = { aL: a, aR: a, ...jmp }; }
-    else if (lt < tW0) pose = { aL: 1.45, aR: 1.45, ...jmp };
-    else if (lt < tW1) pose = { view: 'side', walk: walk.walk, dy: walk.dy, aL: 1.45, aR: 1.45 };
-    else if (lt < tPut) pose = { ...turn(lt, tW1, tW1 + .12, .25, 0), aL: 1.45, aR: 1.45 };
-    else { const a = lerp(1.45, .5, ease(seg(lt, tPut + .1, tPutEnd + .1))); pose = { aL: a, aR: a }; }
-    const cl = { ...mood, ...pose, sq: (mood.sq || 0) * (lt < 2.2 ? 1 : .5) + (pose.sq || 0), dy: (mood.dy || 0) * (lt < tW0 ? 1 : .2) + (pose.dy || 0) };
-    if (lt >= 2.0 && lt < tPut) { cl.aL = pose.aL; cl.aR = pose.aR; }
-    // safe and card
+    // hook with the shiny bait: lowers, then swings in close to her card, misses, and withdraws
+    let hx = hookX0, hy = kf(lt, [[1.9, -280], [3.0, 270]], easeOut), r = .09 * Math.sin(lt * 2.4);
+    if (lt > 3.7) { const k = seg(lt, 3.7, 5.1); hx = kf(lt, [[3.7, hookX0], [4.35, 790], [5.1, 1330]]); hy = kf(lt, [[3.7, 270], [4.35, 500], [5.1, 120]]); r = .25 * Math.sin((lt - 3.7) * 6) * (1 - k * .7); }
+    // her acting: hugging the card, noticing the hook, twisting away and shaking her head "no"
+    const away = ease(seg(lt, 3.75, 4.15)) * (1 - ease(seg(lt, 4.75, 5.05)));
+    const nod = 1.2 * Math.abs(Math.sin(lt * 5)) * .2;
+    const noShake = lt > 4.1 && lt < 4.9 ? Math.sin((lt - 4.1) * 22) * .14 * (1 - seg(lt, 4.1, 4.9)) : 0;
+    const notice = ease(seg(lt, 2.2, 2.45)) * (1 - ease(seg(lt, 3.5, 3.7)));
+    const hug = ease(seg(lt, 2.5, 2.9));
+    const chest = [gx - 22 * away, G - 4.7 * GU];
+    const bounce = -.25 * Math.abs(Math.sin(lt * Math.PI * 2)) * (1 - away);
+    const o = {
+      t, dy: bounce, sq: .05 * Math.abs(Math.sin(lt * Math.PI * 2)), rot: -.2 * away, tilt: noShake + (lt < 3.7 ? .05 * Math.sin(lt * 2.5) : -.08 * away),
+      mouth: talk(t), eyes: lt < 2.2 ? 'happy' : away > .3 ? 'open' : 'wide', brow: lt < 2.2 ? .6 : away > .2 ? -1 : .8, blush: .6 + .3 * away,
+      look: notice * .9 - away * .5, sway: .15 * Math.sin(lt * 3) - .5 * away,
+      handL: [-1.35 - hug * .15 - away * 1.1, -4.1 + .2 * Math.sin(lt * 3)], handR: [1.35 + hug * .15 - away * 1.1, -4.1 + .2 * Math.sin(lt * 3 + 1)],
+      held: u => card(chest[0] - gx, chest[1] - G - dyPx(bounce, u), -.05 * away, { s: .62 - .04 * hug, glow: .25 }),
+      noBlink: false
+    };
+    girl(gx, G, GU, o);
+    hook(hx, hy, r, 1, t);
+    camEnd();
+    caption(t);
+    flushLetters();
+    boilSeed('transition');
+    if (lt < .5) iris(gx, G - 6 * GU, lerp(0, 1500, easeIn(lt / .5)));
+    if (lt > dur - .3) brushWipe((lt - (dur - .3)) / .6, WIPE);
+  }
+  const dyPx = (d, u) => d * u;
+
+  // ---------- shot B: small steps to the safe ----------
+  function shotWalk(t, lt, dur) {
+    const tW0 = .4, tW1 = 2.6, tPut = 2.9, tPutEnd = 3.5, tClose = 3.6, tSlam = 4.1;
+    const x0 = 420, x1 = 1150, k = ease(seg(lt, tW0, tW1)), gx = lerp(x0, x1, k), moving = lt > tW0 && lt < tW1;
+    const dist = Math.abs(gx - x0), steps = dist / (2.6 * GU), phase = steps;
+    const shake = lt > tSlam ? shakeXY(t, 6 * Math.exp(-(lt - tSlam) * 9)) : [0, 0];
+    camBegin(kf(lt, [[0, 960], [2.6, 1020], [dur, 1060]]) + shake[0], 540 + shake[1], 1);
+    room(t);
     const open = lt < tClose ? 1 : lt < tSlam ? 1 - easeIn(seg(lt, tClose, tSlam)) : 0;
-    const head = [x, G + (cl.dy || 0) * u - 8 * u * (1 - (cl.sq || 0)) - 105];
-    const dest = [SAFE.x + SAFE.w / 2 + 6, SAFE.y + SAFE.h / 2];
     safe(open, 0, lt > tPut ? .5 * seg(lt, tPutEnd - .2, tPutEnd + .2) * (1 - seg(lt, tClose, tSlam)) : 0);
-    // card positions
-    if (lt < tCatch) { const B = hookB(hx, hy, hr), o = rot2(0, HOLE, hr); card(B[0] + o[0], B[1] + o[1], hr, { glow: .2 }); }
-    else if (lt < tPut) {
-      const k = easeOut(seg(lt, tCatch, tCatch + .35)), B = hookB(hx, lower, 0), start = [B[0], B[1] + HOLE];
-      const p = lt < tCatch + .35 ? arcPt(start, head, 60, k) : head;
-      card(p[0], p[1] + (lt > 2.2 ? 3 * Math.sin(lt * 7) : 0), .06 * Math.sin(lt * 5) * seg(lt, tCatch + .3, 2.4), { s: lerp(1, .85, k), glow: .25 });
-    } else if (lt < tPutEnd) {
-      const k = ease(seg(lt, tPut, tPutEnd)), p = arcPt(head, dest, 90, k);
-      card(p[0], p[1], .12 * Math.sin(k * Math.PI), { s: lerp(.85, .78, k), glow: .25 });
-    } else card(dest[0], dest[1], 0, { s: .78, glow: .2 });
+    const bob = moving ? -Math.abs(Math.sin(phase * Math.PI)) * .45 : 0;
+    const reach = ease(seg(lt, tPut - .25, tPut)) * (1 - ease(seg(lt, tPutEnd, tPutEnd + .3)));
+    const chest = [gx, G - 4.7 * GU + bob * GU];
+    const dest = [SAFE.x + SAFE.w / 2 + 6, SAFE.y + SAFE.h / 2];
+    const o = {
+      t, dy: bob, rot: moving ? .035 * Math.sin(phase * Math.PI) : 0, tilt: moving ? .07 * Math.sin(phase * Math.PI) : 0,
+      walk: moving ? phase : null, walkDir: 1, mouth: talk(t), eyes: 'happy', brow: .4, blush: .7, look: lt < tPut ? .6 : 0,
+      sway: moving ? .35 * Math.sin(phase * Math.PI * 2) : .1 * Math.sin(lt * 3),
+      handL: [-1.35 + 1.5 * reach, -4.1 - 1.2 * reach], handR: [1.35 + 1.5 * reach, -4.1 - 1.2 * reach],
+      held: u => { if (lt < tPut) card(chest[0] - gx, chest[1] - G - bob * u, 0, { s: .62, glow: .2 }); }
+    };
+    girl(gx, G, GU, o);
+    // card travels into the safe
+    if (lt >= tPut && lt < tPutEnd) { const kk = ease(seg(lt, tPut, tPutEnd)), p = arcPt([gx + 20, chest[1] - 10], dest, 90, kk); card(p[0], p[1], .12 * Math.sin(kk * Math.PI), { s: lerp(.62, .78, kk), glow: .25 }); }
+    else if (lt >= tPutEnd) card(dest[0], dest[1], 0, { s: .78, glow: .2 });
     const dc = safeDoor(open, lt > tSlam ? 2.2 * easeOut(seg(lt, tSlam, tSlam + .5)) : 0);
-    clawd(x, G, u, cl);
-    hook(hx, hy, hr, lt < tCatch + .05 ? 1 : 1, t);
+    // the big idea: a bulb over her head at "وعي كبير"
+    const ba = lt - 1.6;
+    if (ba > 0 && lt < 3.2) emote('bulb', gx, G - 15.5 * GU + bob * GU, 30, seg(ba, 0, .3) * (1 - seg(lt, 2.9, 3.2)), ba);
     burst(SAFE.x + SAFE.w * .62, SAFE.y + SAFE.h * .55, tSlam, lt, 120);
     const eye = toScreen(...dc);
     camEnd();
+    caption(t);
+    flushLetters();
     boilSeed('transition');
     if (lt < .3) brushWipe(.5 + lt / .6, WIPE);
     if (lt > dur - .5) iris(...eye, lerp(1500, 0, easeIn(seg(lt, dur - .5, dur - .03))));
   }
 
-  // ---------- shot C: the lock ----------
+  // ---------- shot C: the lock holds ----------
   function shotLock(t, lt, dur) {
-    const u = 26, tLock = .7, tLand = 1.15, tHookIn = 1.55, tHit = 2.45, tShield = 3.15;
-    const hx = 1625, hitY = 560;
-    const zoom = 1.12 + .03 * seg(lt, 0, 4.2), shake = lt > tHit ? shakeXY(t, 8 * Math.exp(-(lt - tHit) * 10)) : [0, 0];
+    const tLock = .4, tLand = .85, tShield = 1.0, tHookIn = 1.7, tHit = 2.55;
+    const hx = 1625, hitY = 560, gx = 1190;
+    const zoom = 1.12 + .03 * seg(lt, 0, 4.4), shake = lt > tHit ? shakeXY(t, 8 * Math.exp(-(lt - tHit) * 10)) : [0, 0];
     camBegin(1400 + shake[0], 600 + shake[1], zoom);
     room(t);
     safe(0, 0);
     const dc = safeDoor(0, 2.2);
     hasp();
-    // padlock drops onto the hasp
     const ly = LATCH[1] + 22;
     const py = lt < tLand ? lerp(ly - 620, ly, easeIn(seg(lt, tLock, tLand))) : ly + 9 * spring(lt, tLand, 7, 24);
     const open = 1 - easeOut(seg(lt, tLand + .05, tLand + .2));
     if (lt >= tLock) padlock(LATCH[0], py, lt < tLand + .05 ? 1 : open);
     burst(LATCH[0], ly, tLand + .15, lt, 80);
-    // the hook sneaks in, clangs off the lock and flees
+    // the hook creeps in, clangs off the lock and flees
     let hy = -400, r = 0;
-    if (lt >= tHookIn) hy = lt < tHit ? kf(lt, [[tHookIn, -360], [tHit - .25, hitY - 50], [tHit, hitY]], easeOut) + (lt < tHit - .2 ? 8 * Math.sin(lt * 11) : 0) : lerp(hitY, -520, easeIn(seg(lt, tHit + .1, 3.2))) - 40 * Math.exp(-(lt - tHit) * 12);
-    if (lt >= tHit) r = .6 * spring(lt, tHit, 4, 20) * 1.0;
+    if (lt >= tHookIn) hy = lt < tHit ? kf(lt, [[tHookIn, -360], [tHit - .25, hitY - 50], [tHit, hitY]], easeOut) + (lt < tHit - .2 ? 8 * Math.sin(lt * 11) : 0) : lerp(hitY, -520, easeIn(seg(lt, tHit + .1, 3.3))) - 40 * Math.exp(-(lt - tHit) * 12);
+    if (lt >= tHit) r = .6 * spring(lt, tHit, 4, 20);
     const coinP = lt < tHit ? hookTip(hx, hy, r) : null;
-    if (lt >= tHookIn && lt < 3.3) {
+    if (lt >= tHookIn && lt < 3.4) {
       boilSeed('hook');
       inkLine([[hx, hy - 1400], [hx, hy]], 1.1, STEELD, 'inkfine', 0);
       push(); translate(hx, hy); rotate(r); scale(HS);
@@ -247,23 +352,30 @@
       pop();
       if (coinP) { glow(coinP[0], coinP[1] - 20, 120, GOLD, .8); coinAt(coinP[0], coinP[1] - 20, 34, t); }
     }
-    if (lt >= tHit) {   // the coin pops off and falls to the floor, bounces, lies flat
+    if (lt >= tHit) {
       const a = lt - tHit, p0 = hookTip(hx, hitY, 0), x = p0[0] + 120 * a, y = Math.min(G + 22, p0[1] - 20 - 380 * a + 1100 * a * a);
-      const landed = y >= G + 22 - .5;
-      if (landed) paint(ellPts(x, G + 22, 36, 12, 16, .6), { wash: PAL.ochre, ink: PAL.ink, sw: .9 }); else coinAt(x, y, 34, t);
+      if (y >= G + 21.5) paint(ellPts(x, G + 22, 36, 12, 16, .6), { wash: PAL.ochre, ink: PAL.ink, sw: .9 }); else coinAt(x, y, 34, t);
     }
     burst(hx + 30, hitY + 30, tHit, lt, 110);
-    // shield
     shield(SAFE.x + SAFE.w / 2, 300, 1.35, seg(lt, tShield, tShield + .5));
-    // Clawd watches
-    const mood = emotions(lt, [[0, 'proud', { lookX: .8 }], [1.35, 'relieved', { lookX: .7, lookY: -.3 }], [1.9, 'suspicious', { lookX: .9, lookY: -.8 }],
-                               [3.0, 'cool'], [3.6, 'love', { lookX: .8, lookY: -.2 }]]);
-    clawd(1190, G, u, { ...mood, view: 'front' });
+    // the girl: relieved at the lock, startled by the hook, then a big proud smile and hearts
+    const startle = ease(seg(lt, tHit - .1, tHit + .1)) * (1 - ease(seg(lt, tHit + .5, tHit + .8)));
+    const proud = ease(seg(lt, 3.5, 3.9));
+    const jmp = jump(lt, 3.9, 4.4, 1.6);
+    girl(gx, G, GU, {
+      t, dy: -.2 * Math.abs(Math.sin(lt * Math.PI * 2)) * (1 - startle) + jmp.dy - 1.0 * startle * Math.exp(-(lt - tHit) * 2) * 0, sq: jmp.sq + .05 * Math.abs(Math.sin(lt * Math.PI * 2)),
+      tilt: .06 * Math.sin(lt * 2.5) - .08 * startle, mouth: lt > tHit - .1 && lt < tHit + .6 ? .7 : talk(t), eyes: startle > .3 ? 'wide' : proud > .5 ? 'happy' : 'open',
+      brow: startle > .3 ? 1 : .5, blush: .7 + .3 * proud, look: lt < 1.4 ? .8 : lt < tHit + .6 ? .9 : 0,
+      aL: -.9 + 2.3 * proud * (.6 + .4 * Math.sin(lt * 12)) * (lt > 3.5 ? 1 : 0), aR: -.9 + 2.0 * proud, sway: .15 * Math.sin(lt * 3)
+    });
+    if (proud > .05) emote('hearts', gx + 3.5 * GU, G - 13.5 * GU, 22, proud, lt - 3.5);
     camEnd();
+    caption(t);
+    flushLetters();
     boilSeed('transition');
     if (lt < .6) iris(...toScreen(...dc, { cx: 1400, cy: 600, zoom: 1.12, rot: 0 }), lerp(0, 1500, easeIn(lt / .6)));
-    if (lt > dur - .6) iris(...toScreen(1190, G - 4 * u, { cx: 1400, cy: 600, zoom, rot: 0 }), lerp(1500, 0, ease(seg(lt, dur - .6, dur - .02))));
+    if (lt > dur - .6) iris(...toScreen(gx, G - 6 * GU, { cx: 1400, cy: 600, zoom, rot: 0 }), lerp(1500, 0, ease(seg(lt, dur - .6, dur - .02))));
   }
 
-  shots([[0, shotBait], [4.8, shotSafe], [10.4, shotLock]]);
+  shots([[0, shotGuard], [5.2, shotWalk], [10.0, shotLock]]);
 })();
