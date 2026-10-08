@@ -70,7 +70,7 @@ async function openPage(tag = '') {
   const page = await browser.newPage();
   page.on('console', m => { if (['error', 'warn'].includes(m.type())) console.log(`[page${tag}]`, m.text()); });
   page.on('pageerror', e => console.log(`[page error${tag}]`, e.message));
-  await page.goto(pathToFileURL(resolve('studio.html')).href + '?render', { waitUntil: 'networkidle0' });
+  await page.goto(pathToFileURL(resolve('studio.html')).href + '?render', { waitUntil: 'networkidle0', timeout: 0 });
   await page.waitForFunction('window.ready === true', { timeout: 60000 });
   if (args.loop) {
     const ok = await page.evaluate(name => { if (!LOOPS[name]) return false; window.LOOP = LOOPS[name]; return true; }, args.loop);
@@ -123,8 +123,9 @@ if (args.sheet || args.strip) {
   console.log(`${todo.length} frames to render (${last - first + 1 - todo.length} already done), ${workers} workers`);
   let next = 0, done = 0; const start = Date.now();
   await Promise.all(Array.from({ length: workers }, async (_, w) => {
-    const page = await openPage('#' + w);
+    let page = await openPage('#' + w), n = 0;
     while (next < todo.length) {
+      if (args.recycle && n++ >= +args.recycle) { await page.close(); page = await openPage('#' + w); n = 1; }   // --recycle=N: fresh page every N frames (software GL slows down after a few frames)
       const i = todo[next++], f = `${FRAMES_DIR}/f${String(i).padStart(5, '0')}.jpg`;
       const buf = await frameOf(page, i / fps, 'image/jpeg', .94);
       writeFileSync(f + '.tmp', buf); renameSync(f + '.tmp', f);
